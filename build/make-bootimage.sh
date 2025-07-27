@@ -63,7 +63,7 @@ if [ "$deviceinfo_bootimg_header_version" -eq 2 ]; then
     mkbootimg --kernel "$KERNEL" --ramdisk "$RAMDISK" --dtb "$DTB" --base $deviceinfo_flash_offset_base --kernel_offset $deviceinfo_flash_offset_kernel --ramdisk_offset $deviceinfo_flash_offset_ramdisk --second_offset $deviceinfo_flash_offset_second --tags_offset $deviceinfo_flash_offset_tags --dtb_offset $deviceinfo_flash_offset_dtb --pagesize $deviceinfo_flash_pagesize --cmdline "$deviceinfo_kernel_cmdline" -o "$OUT" --header_version $deviceinfo_bootimg_header_version --os_version $deviceinfo_bootimg_os_version --os_patch_level $deviceinfo_bootimg_os_patch_level
 else
     if [ -n "$deviceinfo_kernel_separated_dt" ] && $deviceinfo_kernel_separated_dt; then
-        EXTRA_ARGS="--dt $DTB"
+        EXTRA_ARGS="--dtb $DTB"
     else
         EXTRA_ARGS=""
     fi
