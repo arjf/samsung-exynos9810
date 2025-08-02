@@ -3,12 +3,17 @@ set -xe
 
 BUILD_DIR=
 OUT=
+# Default build options (override with CLI)
+BPF_SPOOF=1       # 1=spoof 4.19.236, 2=revert
+CLEAN_BUILD=n     # y=clean build directories
 
 while [ $# -gt 0 ]
 do
     case "$1" in
     (-b) BUILD_DIR="$(realpath "$2")"; shift;;
     (-o) OUT="$2"; shift;;
+    (-s|--bpfspoof) BPF_SPOOF="$2"; shift;;
+    (-C|--clean) CLEAN_BUILD=y;;
     (-*) echo "$0: Error: unknown option $1" 1>&2; exit 1;;
     (*) OUT="$2"; break;;
     esac
@@ -43,26 +48,41 @@ case $deviceinfo_arch in
 esac
 
 cd "$TMPDOWN"
-    [ -d aarch64-linux-android-4.9 ] || git clone https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 -b pie-gsi --depth 1
+    [ -d aarch64-linux-android-4.9 ] || git clone https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 -b android13-gsi --depth 1
     GCC_PATH="$TMPDOWN/aarch64-linux-android-4.9"
     if $deviceinfo_kernel_clang_compile; then
-        [ -d linux-x86 ] || git clone https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 -b android10-gsi --depth 1
-        CLANG_PATH="$TMPDOWN/linux-x86/clang-r353983c"
+        CLANG_DIR="$TMPDOWN/clang-18.0.1-r522817"
+        CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/llvm-r522817/clang-r522817.tar.gz"
+        if [ ! -d "$CLANG_DIR/bin" ]; then
+            echo "Fetching clang toolchain to $CLANG_DIR"
+            mkdir -p "$CLANG_DIR"
+            if [ -n "$CLANG_URL" ]; then
+                curl -L "$CLANG_URL" | tar -xz -C "$CLANG_DIR"
+            fi
+        fi
+        CLANG_PATH="$CLANG_DIR"
     fi
     if [ "$deviceinfo_arch" == "aarch64" ]; then
-        [ -d arm-linux-androideabi-4.9 ] || git clone https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 -b pie-gsi --depth 1
+        [ -d arm-linux-androideabi-4.9 ] || git clone https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 -b android13-gsi --depth 1
         GCC_ARM32_PATH="$TMPDOWN/arm-linux-androideabi-4.9"
     fi
     KERNEL_DIR="$(basename "${deviceinfo_kernel_source}")"
     KERNEL_DIR="${KERNEL_DIR%.*}"
     [ -d "$KERNEL_DIR" ] || git clone "$deviceinfo_kernel_source" -b $deviceinfo_kernel_source_branch --depth 1
+    
+    # Apply BPF kernel version spoof 
+    if [ "$BPF_SPOOF" = "1" ]; then
+        sed -i 's/strcpy(tmp.release, \"4\\.9\\.337\");/strcpy(tmp.release, \"4.19.236\");/g' "$KERNEL_DIR/kernel/sys.c" || true
+    elif [ "$BPF_SPOOF" = "2" ]; then
+        sed -i 's/strcpy(tmp.release, \"4\\.19\\.236\");/strcpy(tmp.release, \"4.9.337\");/g' "$KERNEL_DIR/kernel/sys.c" || true
+    fi
 
     [ -f halium-boot-ramdisk.img ] || curl --location --output halium-boot-ramdisk.img \
         "https://github.com/halium/initramfs-tools-halium/releases/download/continuous/initrd.img-touch-${RAMDISK_ARCH}"
     
     if [ -n "$deviceinfo_kernel_apply_overlay" ] && $deviceinfo_kernel_apply_overlay; then
-        [ -d libufdt ] || git clone https://android.googlesource.com/platform/system/libufdt -b pie-gsi --depth 1
-        [ -d dtc ] || git clone https://android.googlesource.com/platform/external/dtc -b pie-gsi --depth 1
+        [ -d libufdt ] || git clone https://android.googlesource.com/platform/system/libufdt -b android13-gsi --depth 1
+        [ -d dtc ] || git clone https://android.googlesource.com/platform/external/dtc -b android13-gsi --depth 1
     fi
     ls .
 cd "$HERE"
