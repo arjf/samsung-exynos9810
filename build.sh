@@ -48,7 +48,7 @@ case $deviceinfo_arch in
 esac
 
 cd "$TMPDOWN"
-    [ -d aarch64-linux-android-4.9 ] || git clone https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 -b android13-gsi --depth 1
+    [ -d aarch64-linux-android-4.9 ] || git clone https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 -b android12L-gsi --depth 1
     GCC_PATH="$TMPDOWN/aarch64-linux-android-4.9"
     if $deviceinfo_kernel_clang_compile; then
         CLANG_DIR="$TMPDOWN/clang-18.0.1-r522817"
@@ -63,12 +63,12 @@ cd "$TMPDOWN"
         CLANG_PATH="$CLANG_DIR"
     fi
     if [ "$deviceinfo_arch" == "aarch64" ]; then
-        [ -d arm-linux-androideabi-4.9 ] || git clone https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 -b android13-gsi --depth 1
+        [ -d arm-linux-androideabi-4.9 ] || git clone https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 -b android12L-gsi --depth 1
         GCC_ARM32_PATH="$TMPDOWN/arm-linux-androideabi-4.9"
     fi
     KERNEL_DIR="$(basename "${deviceinfo_kernel_source}")"
     KERNEL_DIR="${KERNEL_DIR%.*}"
-    [ -d "$KERNEL_DIR" ] || git clone "$deviceinfo_kernel_source" -b $deviceinfo_kernel_source_branch --depth 1
+    [ -d "$KERNEL_DIR" ] || git clone --recurse-submodules "$deviceinfo_kernel_source" -b $deviceinfo_kernel_source_branch --depth 1
     
     # Apply BPF kernel version spoof 
     if [ "$BPF_SPOOF" = "1" ]; then
