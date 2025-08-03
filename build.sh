@@ -3,9 +3,10 @@ set -xe
 
 BUILD_DIR=
 OUT=
-# Default build options (override with CLI)
 BPF_SPOOF=1       # 1=spoof 4.19.236, 2=revert
 CLEAN_BUILD=n     # y=clean build directories
+KERNELSU="y"
+SELINUX_MODE="enforcing"
 
 while [ $# -gt 0 ]
 do
@@ -14,6 +15,8 @@ do
     (-o) OUT="$2"; shift;;
     (-s|--bpfspoof) BPF_SPOOF="$2"; shift;;
     (-C|--clean) CLEAN_BUILD=y;;
+    (--enable-kernelsu|--ksu) KERNELSU="$2"; shift;;
+    (--selinux-mode|--sel) SELINUX_MODE="$2"; shift;;
     (-*) echo "$0: Error: unknown option $1" 1>&2; exit 1;;
     (*) OUT="$2"; break;;
     esac
@@ -22,6 +25,9 @@ done
 
 OUT="$(realpath "$OUT" 2>/dev/null || echo 'out')"
 mkdir -p "$OUT"
+
+deviceinfo_kernel_defconfig="${deviceinfo_kernel_defconfig:?deviceinfo_kernel_defconfig is unset}"
+export BPF_SPOOF KERNELSU SELINUX_MODE
 
 if [ -z "$BUILD_DIR" ]; then
     TMP=$(mktemp -d)
@@ -47,42 +53,41 @@ case $deviceinfo_arch in
     "x86") RAMDISK_ARCH="i386";;
 esac
 
+
+
 cd "$TMPDOWN"
-    [ -d aarch64-linux-android-4.9 ] || git clone https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 -b android12L-gsi --depth 1
-    GCC_PATH="$TMPDOWN/aarch64-linux-android-4.9"
-    if $deviceinfo_kernel_clang_compile; then
-        CLANG_DIR="$TMPDOWN/clang-18.0.1-r522817"
-        CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/llvm-r522817/clang-r522817.tar.gz"
-        if [ ! -d "$CLANG_DIR/bin" ]; then
-            echo "Fetching clang toolchain to $CLANG_DIR"
-            mkdir -p "$CLANG_DIR"
-            if [ -n "$CLANG_URL" ]; then
-                curl -L "$CLANG_URL" | tar -xz -C "$CLANG_DIR"
-            fi
+    # Get clang
+    CLANG_DIR="$TMPDOWN/zyc-clang-22.0.0"
+    CLANG_URL="https://github.com/ZyCromerZ/Clang/releases/download/22.0.0git-20250803-release/Clang-22.0.0git-20250803.tar.gz"
+    if [ ! -d "$CLANG_DIR/bin" ]; then
+        echo "Fetching clang toolchain to $CLANG_DIR"
+        mkdir -p "$CLANG_DIR"
+        if [ -n "$CLANG_URL" ]; then
+            curl -L "$CLANG_URL" | tar -xz -C "$CLANG_DIR"
         fi
-        CLANG_PATH="$CLANG_DIR"
     fi
-    if [ "$deviceinfo_arch" == "aarch64" ]; then
-        [ -d arm-linux-androideabi-4.9 ] || git clone https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 -b android12L-gsi --depth 1
-        GCC_ARM32_PATH="$TMPDOWN/arm-linux-androideabi-4.9"
-    fi
+    
+    CLANG_PATH="$CLANG_DIR"
     KERNEL_DIR="$(basename "${deviceinfo_kernel_source}")"
     KERNEL_DIR="${KERNEL_DIR%.*}"
     [ -d "$KERNEL_DIR" ] || git clone --recurse-submodules "$deviceinfo_kernel_source" -b $deviceinfo_kernel_source_branch --depth 1
     
-    # Apply BPF kernel version spoof 
-    if [ "$BPF_SPOOF" = "1" ]; then
-        sed -i 's/strcpy(tmp.release, \"4\\.9\\.337\");/strcpy(tmp.release, \"4.19.236\");/g' "$KERNEL_DIR/kernel/sys.c" || true
-    elif [ "$BPF_SPOOF" = "2" ]; then
-        sed -i 's/strcpy(tmp.release, \"4\\.19\\.236\");/strcpy(tmp.release, \"4.9.337\");/g' "$KERNEL_DIR/kernel/sys.c" || true
+    # Clang optimizations
+    if "$CLANG_PATH/bin/clang" --version | grep -qE ' 1[89]|2[0-9]'; then
+        export CONFIG_THINLTO=y
+        export CONFIG_UNIFIEDLTO=y
+        export CONFIG_LLVM_MLGO_REGISTER=y
+        export CONFIG_LLVM_POLLY=y
+        export CONFIG_LLVM_DFA_JUMP_THREAD=y
     fi
+
 
     [ -f halium-boot-ramdisk.img ] || curl --location --output halium-boot-ramdisk.img \
         "https://github.com/halium/initramfs-tools-halium/releases/download/continuous/initrd.img-touch-${RAMDISK_ARCH}"
     
     if [ -n "$deviceinfo_kernel_apply_overlay" ] && $deviceinfo_kernel_apply_overlay; then
-        [ -d libufdt ] || git clone https://android.googlesource.com/platform/system/libufdt -b android13-gsi --depth 1
-        [ -d dtc ] || git clone https://android.googlesource.com/platform/external/dtc -b android13-gsi --depth 1
+        [ -d libufdt ] || git clone https://android.googlesource.com/platform/system/libufdt -b android12L-gsi --depth 1
+        [ -d dtc ] || git clone https://android.googlesource.com/platform/external/dtc -b android12L-gsi --depth 1
     fi
     ls .
 cd "$HERE"
@@ -91,15 +96,28 @@ if [ -n "$deviceinfo_kernel_apply_overlay" ] && $deviceinfo_kernel_apply_overlay
     "$SCRIPT/build-ufdt-apply-overlay.sh" "${TMPDOWN}"
 fi
 
-if $deviceinfo_kernel_clang_compile; then
-    CC=clang \
-    CLANG_TRIPLE=${deviceinfo_arch}-linux-gnu- \
-    PATH="$CLANG_PATH/bin:$GCC_PATH/bin:$GCC_ARM32_PATH/bin:${PATH}" \
-    "$SCRIPT/build-kernel.sh" "${TMPDOWN}" "${TMP}/system"
-else
-    PATH="$GCC_PATH/bin:${PATH}" \
-    "$SCRIPT/build-kernel.sh" "${TMPDOWN}" "${TMP}/system"
-fi
+# Compat for gcc only trees
+for prefix in arm-linux-androideabi aarch64-linux-gnu; do
+    for t in ar nm objcopy objdump ranlib strip; do
+        ln -sf "$(command -v llvm-$t)" "${CLANG_PATH}/bin/${prefix}-$t"
+    done
+done
+
+# Set paths for llvm
+export CC=$CLANG_PATH/bin/clang
+export LD=$CLANG_PATH/bin/ld.lld
+export AR=$CLANG_PATH/bin/llvm-ar
+export NM=$CLANG_PATH/bin/llvm-nm
+export OBJCOPY=$CLANG_PATH/bin/llvm-objcopy
+export OBJDUMP=$CLANG_PATH/bin/llvm-objdump
+export STRIP=$CLANG_PATH/bin/llvm-strip
+export READELF=$CLANG_PATH/bin/llvm-readelf
+export LLVM=1
+export KALLSYMS_EXTRA_PASS=1
+
+PATH="$CLANG_PATH/bin:${PATH}" \
+"$SCRIPT/build-kernel.sh" "${TMPDOWN}" "${TMP}/system"
+
 
 "$SCRIPT/make-bootimage.sh" "${TMPDOWN}/KERNEL_OBJ" "${TMPDOWN}/halium-boot-ramdisk.img" "${TMP}/partitions/boot.img"
 
