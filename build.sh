@@ -97,9 +97,9 @@ if [ -n "$deviceinfo_kernel_apply_overlay" ] && $deviceinfo_kernel_apply_overlay
 fi
 
 # Compat for gcc only trees
-for prefix in arm-linux-androideabi aarch64-linux-gnu; do
+for prefix in arm-linux-androideabi; do
     for t in ar nm objcopy objdump ranlib strip; do
-        ln -sf "$(command -v llvm-$t)" "${CLANG_PATH}/bin/${prefix}-$t"
+        ln -sf "$CLANG_PATH/bin/llvm-$t" "${CLANG_PATH}/bin/${prefix}-$t"
     done
 done
 

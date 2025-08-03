@@ -30,6 +30,8 @@ if [ -n "$CC" ]; then
     MAKEOPTS="CC=$CC LD=$LD AR=$AR NM=$NM OBJCOPY=$OBJCOPY OBJDUMP=$OBJDUMP STRIP=$STRIP READELF=$READELF"
 fi
 
+cd "$KERNEL_DIR"
+
 # 
 HALIUM_CONFIG_PATH="arch/$ARCH/configs/halium.config"
 # Create backup of original halium.config
@@ -59,7 +61,6 @@ fi
 echo "Updated halium.config with SELinux and KernelSU settings"
 
 
-cd "$KERNEL_DIR"
 
 # Apply BPF kernel version spoof
 if [[ "$BPF_SPOOF" == 1 ]]; then
