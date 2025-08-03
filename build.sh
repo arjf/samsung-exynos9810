@@ -26,9 +26,6 @@ done
 OUT="$(realpath "$OUT" 2>/dev/null || echo 'out')"
 mkdir -p "$OUT"
 
-deviceinfo_kernel_defconfig="${deviceinfo_kernel_defconfig:?deviceinfo_kernel_defconfig is unset}"
-export BPF_SPOOF KERNELSU SELINUX_MODE
-
 if [ -z "$BUILD_DIR" ]; then
     TMP=$(mktemp -d)
     TMPDOWN=$(mktemp -d)
@@ -46,6 +43,9 @@ mkdir -p "${TMP}/system"
 mkdir -p "${TMP}/partitions"
 
 source "${HERE}/deviceinfo"
+
+deviceinfo_kernel_defconfig="${deviceinfo_kernel_defconfig:?deviceinfo_kernel_defconfig is unset}"
+export BPF_SPOOF KERNELSU SELINUX_MODE
 
 case $deviceinfo_arch in
     "armhf") RAMDISK_ARCH="armhf";;
