@@ -46,6 +46,9 @@ source "${HERE}/deviceinfo"
 
 deviceinfo_kernel_defconfig="${deviceinfo_kernel_defconfig:?deviceinfo_kernel_defconfig is unset}"
 export BPF_SPOOF KERNELSU SELINUX_MODE
+export GREP_OPTIONS='--no-warnings'
+export EGREP='grep -E'
+export egrep='grep -E'
 
 case $deviceinfo_arch in
     "armhf") RAMDISK_ARCH="armhf";;
@@ -57,12 +60,19 @@ esac
 
 cd "$TMPDOWN"
     # Get clang
-    CLANG_DIR="$TMPDOWN/zyc-clang-22.0.0"
-    CLANG_URL="https://github.com/ZyCromerZ/Clang/releases/download/22.0.0git-20250803-release/Clang-22.0.0git-20250803.tar.gz"
+    CLANG_DIR="$TMPDOWN/clang-20.0.0-r547379" #zyc-clang-22.0.0"
+    CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r547379.tar.gz" #"https://github.com/ZyCromerZ/Clang/releases/download/22.0.0git-20250803-release/Clang-22.0.0git-20250803.tar.gz"
+    CLANG_ZIP="clang-r547379.tar.gz"
+
     if [ ! -d "$CLANG_DIR/bin" ]; then
-        echo "Fetching clang toolchain to $CLANG_DIR"
         mkdir -p "$CLANG_DIR"
-        if [ -n "$CLANG_URL" ]; then
+        if [ -f "$HERE/$CLANG_ZIP" ]; then
+            echo "Copying and extracting $CLANG_ZIP to $CLANG_DIR"
+            cp "$HERE/$CLANG_ZIP" "$TMPDOWN/"
+            tar -xz -C "$CLANG_DIR" -f "$TMPDOWN/$CLANG_ZIP"
+        fi
+        if [ -n "$CLANG_URL" ] && [ ! -d "$CLANG_DIR/bin" ]; then
+            echo "Fetching clang toolchain to $CLANG_DIR"
             curl -L "$CLANG_URL" | tar -xz -C "$CLANG_DIR"
         fi
     fi
@@ -113,6 +123,7 @@ export OBJDUMP=$CLANG_PATH/bin/llvm-objdump
 export STRIP=$CLANG_PATH/bin/llvm-strip
 export READELF=$CLANG_PATH/bin/llvm-readelf
 export LLVM=1
+export LLVM_NO_HOST_TOOLS=1
 export KALLSYMS_EXTRA_PASS=1
 
 PATH="$CLANG_PATH/bin:${PATH}" \
