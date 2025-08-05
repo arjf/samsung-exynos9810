@@ -111,6 +111,7 @@ BUILD_GENERATE_CONFIG() {
     else
         echo "# CONFIG_KSU is not set" >> "$TMP_DEFCONFIG"
     fi
+    echo "CONFIG_MACH_EXYNOS9810_STAR2LTE_EUR_OPEN=y" >> "$TMP_DEFCONFIG"
     
     echo "Combined defconfig generated for $deviceinfo_codename"
     echo " "

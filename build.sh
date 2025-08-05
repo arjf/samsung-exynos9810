@@ -6,7 +6,7 @@ OUT=
 BPF_SPOOF=1       # 1=spoof 4.19.236, 2=revert
 CLEAN_BUILD=n     # y=clean build directories
 KERNELSU="y"
-SELINUX_MODE="enforcing"
+SELINUX_MODE="permissive"
 
 while [ $# -gt 0 ]
 do
